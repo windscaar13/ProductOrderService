@@ -13,6 +13,7 @@ import java.rmi.UnexpectedException;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
@@ -62,7 +63,7 @@ public class CommonUtils {
 
     public void resetItemAvailabilityToDefault(){
         Stream.of(PerishableProducts.values())
-                .forEach(prod -> GlobalConstants.itemAvailabilityMap.put(prod.toString(),100));
+                .forEach(prod -> GlobalConstants.itemAvailabilityMap.put(prod.toString(),GlobalConstants.INVENTORY_BASE_LIMIT));
     }
 
     public boolean isItemAvailableForOrder(CreateOrderRequest request){
@@ -83,17 +84,33 @@ public class CommonUtils {
     public void updateMasterOrderDetails(CreateOrderRequest request){
         Stream.of(PerishableProducts.values())
                 .forEach(prod -> {
-                    OrderInfo orderInfo = getOrderInfo(prod.toString(), request.getProductOrders());
+                    int requestOrderValue = getRequestOrderValue(prod.toString(),request.getProductOrders());
                     String weekDayKey = getWeekDayKey(request.getPurchaseDate());
+                    initializeProductOrderMap(weekDayKey);
                     OrderInfo updateOrderInfo = getOrderInfo(prod.toString(), GlobalConstants.productOrderMap.get(weekDayKey));
                     if(updateOrderInfo==null){
                         GlobalConstants.productOrderMap.put(weekDayKey, new ProductOrderDetails());
                         updateOrderInfo = new OrderInfo();
-                        updateOrderInfo.setOrderQuantity(getRequestOrderValue(prod.toString(),request.getProductOrders()));
+                        updateOrderInfo.setOrderQuantity(requestOrderValue);
+                        int availableQuantity = GlobalConstants.INVENTORY_BASE_LIMIT - updateOrderInfo.getOrderQuantity();
+                        updateOrderInfo.setAvailableQuantity(availableQuantity);
+                        GlobalConstants.itemAvailabilityMap.put(prod.toString(),availableQuantity);
                     }else{
-                        updateOrderInfo.setOrderQuantity(updateOrderInfo.getOrderQuantity() + getRequestOrderValue(prod.toString(),request.getProductOrders()));
+                        updateOrderInfo.setOrderQuantity(updateOrderInfo.getOrderQuantity() + requestOrderValue);
+                        int availableQuantity = GlobalConstants.INVENTORY_BASE_LIMIT - updateOrderInfo.getOrderQuantity();
+                        updateOrderInfo.setAvailableQuantity(availableQuantity);
+                        GlobalConstants.itemAvailabilityMap.put(prod.toString(),availableQuantity);
                     }
                 });
+    }
+
+    private void initializeProductOrderMap(String weekDayKey){
+        Map<String, ProductOrderDetails> productOrderMap = GlobalConstants.productOrderMap;
+        ProductOrderDetails orderDetails = productOrderMap.get(weekDayKey);
+        if(orderDetails==null){
+            orderDetails = new ProductOrderDetails();
+        }
+        productOrderMap.put(weekDayKey,orderDetails);
     }
 
     private int getRequestOrderValue(String productType, ProductOrderDetails orderDetails){
@@ -105,12 +122,13 @@ public class CommonUtils {
         }
     }
 
-    private String getWeekDayKey(LocalDateTime date){
+    public String getWeekDayKey(LocalDateTime date) {
         String weekDayKey = date.format(GlobalConstants.formatter);
+        String replacedString = null;
         if (weekDayKey.length() >= 6) {
-            String replacedString = weekDayKey.substring(0, weekDayKey.length() - 6) + "000000";
+            replacedString = weekDayKey.substring(0, weekDayKey.length() - 6) + "000000";
         }
-        return weekDayKey;
+        return replacedString;
     }
 
 
@@ -127,7 +145,7 @@ public class CommonUtils {
                 Stream.of(PerishableProducts.values())
                         .forEach(prod -> {
                             if(GlobalConstants.itemAvailabilityMap.get(prod.toString())<20)
-                                GlobalConstants.itemAvailabilityMap.put(prod.toString(),100);
+                                GlobalConstants.itemAvailabilityMap.put(prod.toString(),GlobalConstants.INVENTORY_BASE_LIMIT);
                         });
             }
         }catch(Exception e){

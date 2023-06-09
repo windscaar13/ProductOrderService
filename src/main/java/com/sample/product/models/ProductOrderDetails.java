@@ -2,10 +2,10 @@ package com.sample.product.models;
 
 public class ProductOrderDetails {
 
-    private OrderInfo milkOrderInfo;
-    private OrderInfo eggOrderInfo;
-    private OrderInfo meatOrderInfo;
-    private OrderInfo fruitsOrderInfo;
+    private OrderInfo milkOrderInfo = new OrderInfo();
+    private OrderInfo eggOrderInfo = new OrderInfo();
+    private OrderInfo meatOrderInfo = new OrderInfo();
+    private OrderInfo fruitsOrderInfo = new OrderInfo();
 
     public OrderInfo getMilkOrderInfo() {
         return milkOrderInfo;

@@ -21,8 +21,9 @@ public class PerishableOrderServiceImpl implements ProductOrderService {
     @Override
     public String refreshStock(StockRefreshRequest request) throws InvalidStockRefreshRequestException, UnexpectedException {
         utils.resetItemAvailabilityIfRequired(request.getRequestTime());
-        if(utils.isValidStockRefreshRequest(request) && PartOfDay.PM.toString().equals(GlobalConstants.partOfDay)){
-            utils.refreshStock(request);
+        if(utils.isValidStockRefreshRequest(request)){
+            if(PartOfDay.PM.toString().equals(GlobalConstants.partOfDay))
+                utils.refreshStock(request);
         }else{
             throw new InvalidStockRefreshRequestException("The Stock Refresh request is invalid, Please review!");
         }

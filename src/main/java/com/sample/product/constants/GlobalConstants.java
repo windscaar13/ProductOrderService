@@ -22,6 +22,8 @@ public class GlobalConstants {
 
     public static final String MODE_DEFAULT = "DEFAULT";
 
+    public static final int INVENTORY_BASE_LIMIT = 100;
+
     public static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
 
     public static String currentDay;
@@ -35,7 +37,7 @@ public class GlobalConstants {
         productOrderMap = new HashMap<>();
         itemAvailabilityMap = new HashMap<>();
         Stream.of(PerishableProducts.values())
-                .forEach(prod -> GlobalConstants.itemAvailabilityMap.put(prod.toString(),100));
+                .forEach(prod -> GlobalConstants.itemAvailabilityMap.put(prod.toString(),INVENTORY_BASE_LIMIT));
         currentDay = LocalDate.now().getDayOfWeek().toString();
         partOfDay = CommonUtils.getInstance().getPartOfDay(LocalDateTime.now());
     }
