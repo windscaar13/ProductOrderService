@@ -6,6 +6,7 @@ import com.sample.product.models.ProductOrderDetails;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -17,6 +18,12 @@ public class GlobalConstants {
     public static final String PRODUCT_FRUIT = "FRUIT";
     public static final String PRODUCT_MEAT = "MEAT";
 
+    public static final String MODE_MANUAL = "MANUAL";
+
+    public static final String MODE_DEFAULT = "DEFAULT";
+
+    public static DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+
     public static String currentDay;
     public static String partOfDay;
 
@@ -26,14 +33,6 @@ public class GlobalConstants {
 
     static{
         productOrderMap = new HashMap<>();
-        Stream.of(DaysOfWeek.values())
-                .forEach(day -> {
-                    productOrderMap.put(day.toString(),new ProductOrderDetails());
-                    productOrderMap.get(day.toString()).setEggOrderInfo(new OrderInfo());
-                    productOrderMap.get(day.toString()).setMilkOrderInfo(new OrderInfo());
-                    productOrderMap.get(day.toString()).setMeatOrderInfo(new OrderInfo());
-                    productOrderMap.get(day.toString()).setFruitsOrderInfo(new OrderInfo());
-                });
         itemAvailabilityMap = new HashMap<>();
         Stream.of(PerishableProducts.values())
                 .forEach(prod -> GlobalConstants.itemAvailabilityMap.put(prod.toString(),100));

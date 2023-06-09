@@ -1,13 +1,20 @@
 package com.sample.product.Util;
 
 import com.sample.product.constants.GlobalConstants;
+import com.sample.product.constants.PartOfDay;
 import com.sample.product.constants.PerishableProducts;
+import com.sample.product.constants.RefreshMode;
 import com.sample.product.models.CreateOrderRequest;
 import com.sample.product.models.OrderInfo;
 import com.sample.product.models.ProductOrderDetails;
+import com.sample.product.models.StockRefreshRequest;
 
+import java.rmi.UnexpectedException;
 import java.time.LocalDateTime;
-import java.util.Map;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 public class CommonUtils {
@@ -27,43 +34,134 @@ public class CommonUtils {
     public void resetItemAvailabilityIfRequired(LocalDateTime currentDate){
         String actualCurrentDay = currentDate.getDayOfWeek().toString();
         String actualPartOfDay = CommonUtils.getInstance().getPartOfDay(currentDate);
-        if(actualCurrentDay!= GlobalConstants.currentDay){
+        LocalTime targetTime = LocalTime.of(6, 0);
+        if(!Objects.equals(actualCurrentDay, GlobalConstants.currentDay)){
             GlobalConstants.currentDay = actualCurrentDay;
-            resetItemAvailabilityToDefault();
+            if(PartOfDay.AM.toString().equals(actualPartOfDay) && currentDate.toLocalTime().isBefore(targetTime)){
+                resetItemAvailabilityToDefault();
+            }
         }
-        if(actualPartOfDay!= GlobalConstants.partOfDay){
+        if(!Objects.equals(actualPartOfDay, GlobalConstants.partOfDay)){
             GlobalConstants.partOfDay = actualPartOfDay;
-            resetItemAvailabilityToDefault();
+            if(PartOfDay.AM.toString().equals(actualPartOfDay) && currentDate.toLocalTime().isBefore(targetTime)){
+                resetItemAvailabilityToDefault();
+            }
         }
     }
 
-    public boolean isItemAvailableForOrder(String productType, int requiredQuantity){
-        int availableQuantity = GlobalConstants.itemAvailabilityMap.get(productType);
-        if(availableQuantity>=requiredQuantity){
-            return true;
+    public void updateCurrentDayInfo(LocalDateTime currentDate){
+        String actualCurrentDay = currentDate.getDayOfWeek().toString();
+        String actualPartOfDay = CommonUtils.getInstance().getPartOfDay(currentDate);
+        if(!Objects.equals(actualCurrentDay, GlobalConstants.currentDay)){
+            GlobalConstants.currentDay = actualCurrentDay;
         }
-        return false;
+        if(!Objects.equals(actualPartOfDay, GlobalConstants.partOfDay)){
+            GlobalConstants.partOfDay = actualPartOfDay;
+        }
     }
 
-    public void updateOrderInformation(LocalDateTime purchaseDate, int purchaseQuantity, String productType){
-        Map<String, ProductOrderDetails> productOrderMap = GlobalConstants.productOrderMap;
-        int availableItemQuantity = GlobalConstants.itemAvailabilityMap.get(productType);
-        ProductOrderDetails orderDetails = productOrderMap.get(purchaseDate.getDayOfWeek().toString());
-        OrderInfo orderInfo = getOrderInfo(productType,orderDetails);
-        orderInfo.setOrderQuantity(orderInfo.getOrderQuantity() + purchaseQuantity);
-        //The available Item Quantity changes after the Order gets placed
-        availableItemQuantity -= purchaseQuantity;
-        orderInfo.setAvailableQuantity(availableItemQuantity);
-        //Update the Item Availability Map with the updated available value
-        GlobalConstants.itemAvailabilityMap.put(productType,availableItemQuantity);
+    public void resetItemAvailabilityToDefault(){
+        Stream.of(PerishableProducts.values())
+                .forEach(prod -> GlobalConstants.itemAvailabilityMap.put(prod.toString(),100));
     }
 
-    public boolean isValidRequest(CreateOrderRequest request){
-        if(request.getProductQuantity()<=0 || request.getProductType()==null || request.getPurchaseDate()==null){
-            return false;
+    public boolean isItemAvailableForOrder(CreateOrderRequest request){
+        AtomicBoolean isItemAvailableForOrder = new AtomicBoolean(true);
+        Stream.of(PerishableProducts.values())
+                .forEach(prod -> {
+                    OrderInfo orderInfo = getOrderInfo(prod.toString(), request.getProductOrders());
+                    int itemAvailable = GlobalConstants.itemAvailabilityMap.get(prod.toString());
+                    if(orderInfo!=null){
+                        if(orderInfo.getOrderQuantity()>itemAvailable){
+                            isItemAvailableForOrder.set(false);
+                        }
+                    }
+                });
+        return isItemAvailableForOrder.get();
+    }
+
+    public void updateMasterOrderDetails(CreateOrderRequest request){
+        Stream.of(PerishableProducts.values())
+                .forEach(prod -> {
+                    OrderInfo orderInfo = getOrderInfo(prod.toString(), request.getProductOrders());
+                    String weekDayKey = getWeekDayKey(request.getPurchaseDate());
+                    OrderInfo updateOrderInfo = getOrderInfo(prod.toString(), GlobalConstants.productOrderMap.get(weekDayKey));
+                    if(updateOrderInfo==null){
+                        GlobalConstants.productOrderMap.put(weekDayKey, new ProductOrderDetails());
+                        updateOrderInfo = new OrderInfo();
+                        updateOrderInfo.setOrderQuantity(getRequestOrderValue(prod.toString(),request.getProductOrders()));
+                    }else{
+                        updateOrderInfo.setOrderQuantity(updateOrderInfo.getOrderQuantity() + getRequestOrderValue(prod.toString(),request.getProductOrders()));
+                    }
+                });
+    }
+
+    private int getRequestOrderValue(String productType, ProductOrderDetails orderDetails){
+        OrderInfo orderInfo = getOrderInfo(productType, orderDetails);
+        if(orderInfo!=null){
+            return orderInfo.getOrderQuantity();
         }else{
-            return true;
+            return 0;
         }
+    }
+
+    private String getWeekDayKey(LocalDateTime date){
+        String weekDayKey = date.format(GlobalConstants.formatter);
+        if (weekDayKey.length() >= 6) {
+            String replacedString = weekDayKey.substring(0, weekDayKey.length() - 6) + "000000";
+        }
+        return weekDayKey;
+    }
+
+
+    public void refreshStock(StockRefreshRequest request) throws UnexpectedException {
+        try{
+            if(request.getMode().equals(RefreshMode.MANUAL.toString())){
+                Stream.of(PerishableProducts.values())
+                        .forEach(prod -> {
+                            OrderInfo orderInfo = getOrderInfo(prod.toString(), request.getOrderDetails());
+                            int itemAvailable = GlobalConstants.itemAvailabilityMap.get(prod.toString());
+                            GlobalConstants.itemAvailabilityMap.put(prod.toString(),orderInfo.getOrderQuantity()+itemAvailable);
+                        });
+            }else if(request.getMode().equals(RefreshMode.DEFAULT.toString())){
+                Stream.of(PerishableProducts.values())
+                        .forEach(prod -> {
+                            if(GlobalConstants.itemAvailabilityMap.get(prod.toString())<20)
+                                GlobalConstants.itemAvailabilityMap.put(prod.toString(),100);
+                        });
+            }
+        }catch(Exception e){
+            throw new UnexpectedException("Unexpected error occurred while Refreshing stock!");
+        }
+    }
+
+    public boolean isValidOrderRequest(CreateOrderRequest request){
+        return request != null && request.getProductOrders() != null && request.getPurchaseDate() != null;
+    }
+
+    public boolean isValidStockRefreshRequest(StockRefreshRequest request){
+        boolean isValidStockRefreshReq = true;
+        if(request==null || request.getMode()==null || request.getRequestTime() == null){
+            isValidStockRefreshReq = false;
+        }else if("MANUAL".equals(request.getMode()) && request.getOrderDetails() == null){
+            isValidStockRefreshReq = false;
+        }else if("MANUAL".equals(request.getMode()) && request.getOrderDetails() != null){
+            isValidStockRefreshReq =  isValidOrderDetails(request.getOrderDetails());
+        }
+        return isValidStockRefreshReq;
+    }
+
+    private boolean isValidOrderDetails(ProductOrderDetails orderDetails){
+        AtomicBoolean isValidOrderDetails = new AtomicBoolean(false);
+        Stream.of(PerishableProducts.values())
+                .forEach(prod -> {
+                    OrderInfo orderInfo = getOrderInfo(prod.toString(), orderDetails);
+                    int itemAvailable = GlobalConstants.itemAvailabilityMap.get(prod.toString());
+                    if(orderInfo!=null){
+                        isValidOrderDetails.set(itemAvailable >= 20 && itemAvailable <= 50 && (itemAvailable + orderInfo.getOrderQuantity()) <= 100);
+                    }
+                });
+        return isValidOrderDetails.get();
     }
 
     public OrderInfo getOrderInfo(String productType, ProductOrderDetails orderDetails){
@@ -78,11 +176,6 @@ public class CommonUtils {
             orderInfo = orderDetails.getMilkOrderInfo();
         }
         return orderInfo;
-    }
-
-    public void resetItemAvailabilityToDefault(){
-        Stream.of(PerishableProducts.values())
-                .forEach(prod -> GlobalConstants.itemAvailabilityMap.put(prod.toString(),100));
     }
 
 }

@@ -4,24 +4,15 @@ import java.time.LocalDateTime;
 
 public class CreateOrderRequest {
 
-    private String productType;
-    private int productQuantity;
+    private ProductOrderDetails productOrders;
     private LocalDateTime purchaseDate;
 
-    public String getProductType() {
-        return productType;
+    public ProductOrderDetails getProductOrders() {
+        return productOrders;
     }
 
-    public void setProductType(String productType) {
-        this.productType = productType;
-    }
-
-    public int getProductQuantity() {
-        return productQuantity;
-    }
-
-    public void setProductQuantity(int productQuantity) {
-        this.productQuantity = productQuantity;
+    public void setProductOrders(ProductOrderDetails productOrders) {
+        this.productOrders = productOrders;
     }
 
     public LocalDateTime getPurchaseDate() {
